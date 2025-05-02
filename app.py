@@ -22,17 +22,34 @@ def generate_class_masks(mask):
 
     return ripe_mask, semiripe_mask, unripe_mask
 
-def count_and_measure_tomatoes(mask_np, min_area=200, min_peak_distance=15):
-    mask_rgb = mask_np
+import cv2
+import numpy as np
+from scipy import ndimage as ndi
+from skimage.feature import peak_local_max
+from skimage.segmentation import watershed
+import matplotlib.pyplot as plt
+
+def count_and_measure_tomatoes(
+    mask_path,
+    min_area=200,
+    min_peak_distance=15,
+    show_output=True
+):
+    # Load and preprocess
+    mask_rgb = cv2.imread(mask_path)
+    mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
     gray = cv2.cvtColor(mask_rgb, cv2.COLOR_RGB2GRAY)
     _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
 
+    # Morphological cleaning
     kernel = np.ones((3, 3), np.uint8)
     binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
+    # Distance transform + smoothing
     distance = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
     distance = cv2.GaussianBlur(distance, (3, 3), 0)
 
+    # Detect local maxima
     local_max_coords = peak_local_max(
         distance,
         min_distance=min_peak_distance,
@@ -42,20 +59,28 @@ def count_and_measure_tomatoes(mask_np, min_area=200, min_peak_distance=15):
     local_max_mask = np.zeros_like(distance, dtype=bool)
     local_max_mask[tuple(local_max_coords.T)] = True
 
+    # Watershed segmentation
     markers = ndi.label(local_max_mask)[0]
     labels = watershed(-distance, markers, mask=binary)
 
+    # Filter and measure regions
+    final_labels = np.zeros_like(labels)
     sizes = []
+    label_id = 1
     for l in range(1, np.max(labels) + 1):
-        area = np.sum(labels == l)
+        region = (labels == l).astype(np.uint8)
+        area = np.sum(region)
         if area >= min_area:
+            final_labels[labels == l] = label_id
             sizes.append(area)
+            label_id += 1
+    return len(sizes), final_labels, sizes
 
-    return sizes
 
-def estimate_tomato_weights(areas):
-    weights = [round(0.0023 * area, 2) for area in areas]
-    return weights
+def estimate_tomato_weights(areas, calibration_factor=0.04):
+    weights = [round(area * calibration_factor, 2) for area in areas]
+    total_weight = round(sum(weights), 2)
+    return weights, total_weight
 
 def estimate_yield(weights):
     return round(sum(weights), 2)
@@ -76,33 +101,30 @@ if uploaded_file:
     # Display all class masks
     st.subheader("🔹 Ripe Tomatoes")
     st.image(ripe_mask, caption="Ripe Mask", use_column_width=True)
-    ripe_areas = count_and_measure_tomatoes(ripe_mask)
-    ripe_weights = estimate_tomato_weights(ripe_areas)
-    st.write(f"Count: {len(ripe_areas)}")
-    st.write(f"Weights: {ripe_weights}")
-    st.write(f"Yield: {estimate_yield(ripe_weights)} kg")
+    ripe_count, ripe_labels,ripe_sizes = count_and_measure_tomatoes(ripe_mask)
+    ripe_weights,ripe_total = estimate_tomato_weights(ripe_areas)
+    st.write(f"Count: {ripe_count}")
+    st.write(f"Yield: {ripe_total} g")
 
     st.subheader("🟡 Semi-Ripe Tomatoes")
-    st.image(semiripe_mask, caption="Semi-Ripe Mask", use_column_width=True)
-    semiripe_areas = count_and_measure_tomatoes(semiripe_mask)
-    semiripe_weights = estimate_tomato_weights(semiripe_areas)
-    st.write(f"Count: {len(semiripe_areas)}")
-    st.write(f"Weights: {semiripe_weights}")
-    st.write(f"Yield: {estimate_yield(semiripe_weights)} kg")
+    st.image(semiripe_mask, caption="Semiripe Mask", use_column_width=True)
+    semiripe_count, semiripe_labels,semiripe_sizes = count_and_measure_tomatoes(semiripe_mask)
+    semiripe_weights,semiripe_total = estimate_tomato_weights(semiripe_areas)
+    st.write(f"Count: {semiripe_count}")
+    st.write(f"Yield: {semiripe_total} g")
 
     st.subheader("🟢 Unripe Tomatoes")
     st.image(unripe_mask, caption="Unripe Mask", use_column_width=True)
-    unripe_areas = count_and_measure_tomatoes(unripe_mask)
-    unripe_weights = estimate_tomato_weights(unripe_areas)
-    st.write(f"Count: {len(unripe_areas)}")
-    st.write(f"Weights: {unripe_weights}")
-    st.write(f"Yield: {estimate_yield(unripe_weights)} kg")
+    unripe_count, unripe_labels,unripe_sizes = count_and_measure_tomatoes(unripe_mask)
+    unripe_weights,unripe_total = estimate_tomato_weights(unripe_areas)
+    st.write(f"Count: {unripe_count}")
+    st.write(f"Yield: {unripe_total} g")
 
     st.subheader("📊 Total Yield Summary")
     total_yield = (
-        estimate_yield(ripe_weights) +
-        estimate_yield(semiripe_weights) +
-        estimate_yield(unripe_weights)
+        estimate_yield(ripe_total) +
+        estimate_yield(semiripe_total) +
+        estimate_yield(unripe_total)
     )
     st.write(f"**Total Estimated Yield: {total_yield} kg**")
 
