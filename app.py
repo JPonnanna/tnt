@@ -97,7 +97,8 @@ if uploaded_file:
 
     with st.spinner("Generating class masks..."):
         ripe_mask, semiripe_mask, unripe_mask = generate_class_masks(mask_np)
-
+    st.image(ripe_mask)
+    st.image(semiripe_mask)
     # Display all class masks
     st.subheader("🔹 Ripe Tomatoes")
     st.image(ripe_mask, caption="Ripe Mask", use_column_width=True)
