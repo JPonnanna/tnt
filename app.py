@@ -7,7 +7,6 @@ from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
 import matplotlib.pyplot as plt
 
-st.set_option('deprecation.showPyplotGlobalUse', False)
 st.title("🍅 Tomato Yield Estimation from Segmentation Mask")
 
 # --- Your notebook functions (adapted for Streamlit) ---
