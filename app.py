@@ -36,6 +36,21 @@ def generate_class_masks(mask):
     
     return ripe_mask, semiripe_mask, unripe_mask
 
+def generate_class_masks(mask):
+    # NO conversion needed here — image from PIL is already in RGB
+    # So keep it as-is for matching
+
+    ripe_mask = np.zeros_like(mask)
+    semiripe_mask = np.zeros_like(mask)
+    unripe_mask = np.zeros_like(mask)
+
+    # Use RGB colors directly
+    ripe_mask[color_match(mask, [0, 0, 255])] = [0, 0, 255]         # Red
+    semiripe_mask[color_match(mask, [255, 255, 0])] = [255, 255, 0] # Yellow
+    unripe_mask[color_match(mask, [0, 255, 0])] = [0, 255, 0]       # Green
+
+    return ripe_mask, semiripe_mask, unripe_mask
+    
 import cv2
 import numpy as np
 from scipy import ndimage as ndi
