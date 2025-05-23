@@ -50,7 +50,7 @@ def count_and_measure_tomatoes(
     show_output=True
 ):
     # Load and preprocess
-    mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
+    #mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
     gray = cv2.cvtColor(mask_rgb, cv2.COLOR_RGB2GRAY)
     _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
 
