@@ -44,13 +44,12 @@ from skimage.segmentation import watershed
 import matplotlib.pyplot as plt
 
 def count_and_measure_tomatoes(
-    mask_path,
+    mask_rgb,
     min_area=200,
     min_peak_distance=15,
     show_output=True
 ):
     # Load and preprocess
-    mask_rgb = cv2.imread(mask_path)
     mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
     gray = cv2.cvtColor(mask_rgb, cv2.COLOR_RGB2GRAY)
     _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
@@ -133,13 +132,13 @@ def estimate_tomato_weights(areas, count, image_width, image_height, base_calibr
     return weights, total_weight
 
 def estimate_yield():
-  ripe_count,ripe_labels,ripe_sizes =count_and_measure_tomatoes("/content/ripe_mask.png")
+  ripe_count,ripe_labels,ripe_sizes =count_and_measure_tomatoes(ripe_mask)
   ripe_weights,ripe_total = estimate_tomato_weights(ripe_sizes,ripe_count,iheight,iwidth)
 
-  semiripe_count,semiripe_labels,semiripe_sizes =count_and_measure_tomatoes("/content/semiripe_mask.png")
+  semiripe_count,semiripe_labels,semiripe_sizes =count_and_measure_tomatoes(semiripe_mask)
   semiripe_weights,semiripe_total = estimate_tomato_weights(semiripe_sizes,semiripe_count,iheight,iwidth)
 
-  unripe_count,unripe_labels,unripe_sizes =count_and_measure_tomatoes("/content/unripe_mask.png")
+  unripe_count,unripe_labels,unripe_sizes =count_and_measure_tomatoes(unripe_mask)
   unripe_weights,unripe_total = estimate_tomato_weights(unripe_sizes,unripe_count,iheight,iwidth)
 
   print(ripe_count,"-----",semiripe_count,"-----",unripe_count)
@@ -162,6 +161,7 @@ if uploaded_file:
 
     with st.spinner("Generating class masks..."):
         ripe_mask, semiripe_mask, unripe_mask = generate_class_masks(mask_np)
+    iheight, iwidth, _ = ripe_mask.shape
     ripe_count,semiripe_count,unripe_count, ripe_total,semiripe_total,unripe_total=estimate_yield()
     st.image(ripe_mask)
     st.image(semiripe_mask)
