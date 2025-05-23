@@ -10,16 +10,30 @@ import matplotlib.pyplot as plt
 st.title("🍅 Tomato Yield Estimation from Segmentation Mask")
 
 # --- Your notebook functions (adapted for Streamlit) ---
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+
+def color_match(mask, color, tolerance=10):
+    return np.all(np.abs(mask - color) <= tolerance, axis=-1)
 
 def generate_class_masks(mask):
+    mask = cv2.cvtColor(mask, cv2.COLOR_BGR2RGB)
+
     ripe_mask = np.zeros_like(mask)
     semiripe_mask = np.zeros_like(mask)
     unripe_mask = np.zeros_like(mask)
 
-    ripe_mask[np.all(mask == [255, 0, 0], axis=-1)] = [255, 0, 0]       # Red in BGR = Blue in RGB
-    semiripe_mask[np.all(mask == [0, 255, 255], axis=-1)] = [0, 255, 255]  # Yellow
-    unripe_mask[np.all(mask == [0, 255, 0], axis=-1)] = [0, 255, 0]     # Green
+    # Apply color filtering with some tolerance
+    ripe_mask[color_match(mask, [0, 0, 255])] = [0, 0, 255]      # Blue
+    semiripe_mask[color_match(mask, [255, 255, 0])] = [255, 255, 0]  # Yellow
+    unripe_mask[color_match(mask, [0, 255, 0])] = [0, 255, 0]     # Green
 
+    # Convert to BGR for saving
+    ripe_mask_bgr = cv2.cvtColor(ripe_mask, cv2.COLOR_RGB2BGR)
+    semiripe_mask_bgr = cv2.cvtColor(semiripe_mask, cv2.COLOR_RGB2BGR)
+    unripe_mask_bgr = cv2.cvtColor(unripe_mask, cv2.COLOR_RGB2BGR)
+    
     return ripe_mask, semiripe_mask, unripe_mask
 
 import cv2
@@ -36,7 +50,7 @@ def count_and_measure_tomatoes(
     show_output=True
 ):
     # Load and preprocess
-    mask_rgb = mask_path
+    mask_rgb = cv2.imread(mask_path)
     mask_rgb = cv2.cvtColor(mask_rgb, cv2.COLOR_BGR2RGB)
     gray = cv2.cvtColor(mask_rgb, cv2.COLOR_RGB2GRAY)
     _, binary = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
@@ -74,16 +88,67 @@ def count_and_measure_tomatoes(
             final_labels[labels == l] = label_id
             sizes.append(area)
             label_id += 1
+
+    # Visualization
+    if show_output:
+        output = mask_rgb.copy()
+        for label in range(1, np.max(final_labels) + 1):
+            mask = np.uint8(final_labels == label)
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(output, contours, -1, (255, 0, 0), 2)
+
+        plt.imshow(output)
+        plt.title(f"Tomatoes: {len(sizes)} | Avg Size: {np.mean(sizes):.1f} px²")
+        plt.axis("off")
+        plt.show()
+
     return len(sizes), final_labels, sizes
 
+def estimate_tomato_weights(areas, count, image_width, image_height, base_calibration_factor=0.04):
+    # Calculate the total area of the image
+    total_image_area = image_width * image_height
 
-def estimate_tomato_weights(areas, calibration_factor=0.04):
+    # Ensure the areas are non-zero by checking the sum of the areas
+    total_area = sum(areas)
+    # if total_area == 0:
+    #     raise ValueError("Total area of tomatoes cannot be zero")
+
+    # Normalize the areas by the total area (or simply use raw areas)
+    normalized_areas = [area / total_area for area in areas]
+
+    # Adjust the calibration factor based on the number of tomatoes
+    if count < 5:  # Assuming low count indicates tomatoes are closer/bigger
+        calibration_factor = base_calibration_factor * 1.2  # Increase factor for larger tomatoes
+    elif count > 20:  # Assuming high count indicates tomatoes are farther/smaller
+        calibration_factor = base_calibration_factor * 0.8  # Decrease factor for smaller tomatoes
+    else:
+        calibration_factor = base_calibration_factor  # Keep base factor for moderate counts
+
+    # Calculate individual tomato weights (scaled with normalized area)
     weights = [round(area * calibration_factor, 2) for area in areas]
+
+    # Calculate total weight
     total_weight = round(sum(weights), 2)
+
     return weights, total_weight
 
-def estimate_yield(weights):
-    return round(sum(weights), 2)
+def estimate_yield():
+  ripe_count,ripe_labels,ripe_sizes =count_and_measure_tomatoes("/content/ripe_mask.png")
+  ripe_weights,ripe_total = estimate_tomato_weights(ripe_sizes,ripe_count,iheight,iwidth)
+
+  semiripe_count,semiripe_labels,semiripe_sizes =count_and_measure_tomatoes("/content/semiripe_mask.png")
+  semiripe_weights,semiripe_total = estimate_tomato_weights(semiripe_sizes,semiripe_count,iheight,iwidth)
+
+  unripe_count,unripe_labels,unripe_sizes =count_and_measure_tomatoes("/content/unripe_mask.png")
+  unripe_weights,unripe_total = estimate_tomato_weights(unripe_sizes,unripe_count,iheight,iwidth)
+
+  print(ripe_count,"-----",semiripe_count,"-----",unripe_count)
+  print(ripe_total,"-----",semiripe_total,"-----",unripe_total)
+  #print(ripe_weights,semiripe_weights,unripe_weights)
+
+  return ripe_count,semiripe_count,unripe_count, ripe_total,semiripe_total,unripe_total
+
+
 
 
 # --- Streamlit Interface ---
@@ -97,46 +162,34 @@ if uploaded_file:
 
     with st.spinner("Generating class masks..."):
         ripe_mask, semiripe_mask, unripe_mask = generate_class_masks(mask_np)
+    ripe_count,semiripe_count,unripe_count, ripe_total,semiripe_total,unripe_total=estimate_yield()
     st.image(ripe_mask)
     st.image(semiripe_mask)
     # Display all class masks
     st.subheader("🔹 Ripe Tomatoes")
     st.image(ripe_mask, caption="Ripe Mask", use_column_width=True)
-    ripe_count, ripe_labels,ripe_sizes = count_and_measure_tomatoes(ripe_mask)
-    ripe_weights,ripe_total = estimate_tomato_weights(ripe_sizes)
     st.write(f"Count: {ripe_count}")
     st.write(f"Yield: {ripe_total} g")
 
     st.subheader("🟡 Semi-Ripe Tomatoes")
     st.image(semiripe_mask, caption="Semiripe Mask", use_column_width=True)
-    semiripe_count, semiripe_labels,semiripe_sizes = count_and_measure_tomatoes(semiripe_mask)
-    semiripe_weights,semiripe_total = estimate_tomato_weights(semiripe_sizes)
     st.write(f"Count: {semiripe_count}")
     st.write(f"Yield: {semiripe_total} g")
 
     st.subheader("🟢 Unripe Tomatoes")
     st.image(unripe_mask, caption="Unripe Mask", use_column_width=True)
-    unripe_count, unripe_labels,unripe_sizes = count_and_measure_tomatoes(unripe_mask)
-    unripe_weights,unripe_total = estimate_tomato_weights(unripe_sizes)
     st.write(f"Count: {unripe_count}")
     st.write(f"Yield: {unripe_total} g")
 
     st.subheader("📊 Total Yield Summary")
-    total_yield = (
-        estimate_yield(ripe_total) +
-        estimate_yield(semiripe_total) +
-        estimate_yield(unripe_total)
-    )
-    st.write(f"**Total Estimated Yield: {total_yield} kg**")
+    
+    st.write("### 📊 Current Observations")
+    st.write(f"**Ripe:** {ripe_count} | **Semi-Ripe:** {semiripe_count} | **Unripe:** {unripe_count}")
+    st.write(f"**Ripe Total:** {ripe_total} | **Semi-Ripe Total:** {semiripe_total} | **Unripe Total:** {unripe_total}")
+    
+    st.write("### 🌾 Yield Estimation")
+    st.write("**Yield ready to harvest:**", round(ripe_total / 1000, 2), "kilograms")
+    st.write("**Yield ready to harvest in a week:**", round(semiripe_total * 1.1 / 1000, 2), "kilograms")
+    st.write("**Yield ready to harvest in a month:**", round(unripe_total * 1.3 / 1000, 2), "kilograms")
 
-    # Optional Pie Chart
-    st.subheader("🍰 Yield Distribution by Ripeness")
-    labels = ['Ripe', 'Semi-Ripe', 'Unripe']
-    values = [
-        estimate_yield(ripe_weights),
-        estimate_yield(semiripe_weights),
-        estimate_yield(unripe_weights)
-    ]
-    fig, ax = plt.subplots()
-    ax.pie(values, labels=labels, autopct='%1.1f%%')
-    st.pyplot(fig)
+
