@@ -178,8 +178,7 @@ if uploaded_file:
         ripe_mask, semiripe_mask, unripe_mask = generate_class_masks(mask_np)
     iheight, iwidth, _ = ripe_mask.shape
     ripe_count,semiripe_count,unripe_count, ripe_total,semiripe_total,unripe_total=estimate_yield()
-    st.image(ripe_mask)
-    st.image(semiripe_mask)
+
     # Display all class masks
     st.subheader("🔹 Ripe Tomatoes")
     st.image(ripe_mask, caption="Ripe Mask", use_column_width=True)
