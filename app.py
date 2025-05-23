@@ -172,7 +172,7 @@ uploaded_file = st.file_uploader("Upload a segmentation mask image (RGB)", type=
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     mask_np = np.array(image)
-    st.image(mask_np, caption="Uploaded Mask", use_column_width=True)
+    st.image(mask_np, caption="Uploaded Mask", use_container_width=True)
 
     with st.spinner("Generating class masks..."):
         ripe_mask, semiripe_mask, unripe_mask = generate_class_masks(mask_np)
@@ -181,17 +181,17 @@ if uploaded_file:
 
     # Display all class masks
     st.subheader("🔹 Ripe Tomatoes")
-    st.image(ripe_mask, caption="Ripe Mask", use_column_width=True)
+    st.image(ripe_mask, caption="Ripe Mask", use_container_width=True)
     st.write(f"Count: {ripe_count}")
     st.write(f"Yield: {ripe_total} g")
 
     st.subheader("🟡 Semi-Ripe Tomatoes")
-    st.image(semiripe_mask, caption="Semiripe Mask", use_column_width=True)
+    st.image(semiripe_mask, caption="Semiripe Mask", use_container_width=True)
     st.write(f"Count: {semiripe_count}")
     st.write(f"Yield: {semiripe_total} g")
 
     st.subheader("🟢 Unripe Tomatoes")
-    st.image(unripe_mask, caption="Unripe Mask", use_column_width=True)
+    st.image(unripe_mask, caption="Unripe Mask", use_container_width=True)
     st.write(f"Count: {unripe_count}")
     st.write(f"Yield: {unripe_total} g")
 
